@@ -197,6 +197,7 @@ async function handleMessengerMessage(event) {
 }
 
 async function sendMessengerReply(recipientId, text) {
+  text = stripMarkdown(text);
   try {
     await axios.post(`${FB_GRAPH_URL}/me/messages`, {
       recipient: { id: recipientId },
@@ -255,6 +256,7 @@ async function handleInstagramMessage(event) {
 
 async function sendInstagramReply(recipientId, text) {
   const igAccessToken = process.env.IG_PAGE_ACCESS_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN;
+  text = stripMarkdown(text);
 
   try {
     await axios.post(`${FB_GRAPH_URL}/me/messages`, {
@@ -331,6 +333,7 @@ async function handleInstagramComment(commentData) {
 
 async function replyToInstagramComment(commentId, text) {
   const accessToken = process.env.FB_PAGE_ACCESS_TOKEN;
+  text = stripMarkdown(text);
 
   try {
     await axios.post(`${FB_GRAPH_URL}/${commentId}/replies`, {
@@ -351,6 +354,7 @@ async function replyToInstagramComment(commentId, text) {
 
 async function sendInstagramPrivateReply(commentId, text) {
   const accessToken = process.env.FB_PAGE_ACCESS_TOKEN;
+  text = stripMarkdown(text);
 
   try {
     await axios.post(`${FB_GRAPH_URL}/${commentId}/private_replies`, {
