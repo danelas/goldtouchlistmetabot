@@ -12,10 +12,11 @@ const MAX_HISTORY = 20;
 // Strip markdown formatting that GPT may include despite instructions
 function stripMarkdown(text) {
   return text
-    .replace(/\*\*(.+?)\*\*/g, '$1')  // **bold**
-    .replace(/\*(.+?)\*/g, '$1')      // *italic*
+    .replace(/\*{1,3}/g, '')           // remove ALL asterisks (bold, italic, etc.)
     .replace(/^#{1,6}\s+/gm, '')      // # headings
-    .replace(/^\s*[-*]\s+/gm, '- ')   // normalise bullet markers
+    .replace(/`([^`]+)`/g, '$1')      // inline code
+    .replace(/```[\s\S]*?```/g, '')   // code blocks
+    .replace(/^\s*[-]\s+/gm, '- ')   // normalise bullet markers
     .trim();
 }
 
@@ -117,7 +118,7 @@ async function generateReply({ senderId, senderName, messageText, platform }) {
 
   const messages = history.reverse().map((msg) => ({
     role: msg.role,
-    content: msg.content,
+    content: stripMarkdown(msg.content),
   }));
 
   // Get system instructions
