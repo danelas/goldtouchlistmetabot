@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: meta-marketing-bot
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FB_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: FB_PAGE_ID
+        sync: false
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false
+      - key: WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: IG_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: meta-marketing-bot-db
+          property: connectionString
+      - key: CRON_SCHEDULE
+        value: "0 10 * * *"
+      - key: CONTENT_NICHE
+        value: marketing
+      - key: CONTENT_TONE
+        value: professional
+      - key: CONTENT_LANGUAGE
+        value: en
+
+databases:
+  - name: meta-marketing-bot-db
+    plan: free
+    databaseName: meta_marketing_bot
