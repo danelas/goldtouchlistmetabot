@@ -102,10 +102,13 @@ async function createPage({ title, content, slug, status = 'publish', parentId =
   // If Elementor data is provided, set meta fields so Elementor renders the page
   if (elementorData) {
     const elementorJson = typeof elementorData === 'string' ? elementorData : JSON.stringify(elementorData);
+    payload.template = 'elementor_header_footer';
     payload.meta = {
       _elementor_data: elementorJson,
       _elementor_edit_mode: 'builder',
       _elementor_template_type: 'wp-page',
+      _elementor_page_settings: JSON.stringify({ hide_title: 'yes' }),
+      _wp_page_template: 'elementor_header_footer',
     };
   }
 
@@ -147,10 +150,13 @@ async function setPostMeta(pageId, elementorData) {
 
   // Try updating the page with meta in a second call
   await axios.post(`${WP_URL}/wp-json/wp/v2/pages/${pageId}`, {
+    template: 'elementor_header_footer',
     meta: {
       _elementor_data: elementorJson,
       _elementor_edit_mode: 'builder',
       _elementor_template_type: 'wp-page',
+      _elementor_page_settings: JSON.stringify({ hide_title: 'yes' }),
+      _wp_page_template: 'elementor_header_footer',
     },
   }, { headers });
 
@@ -183,10 +189,13 @@ async function updatePage(pageId, { title, content, slug, status, elementorData 
 
   if (elementorData) {
     const elementorJson = typeof elementorData === 'string' ? elementorData : JSON.stringify(elementorData);
+    payload.template = 'elementor_header_footer';
     payload.meta = {
       _elementor_data: elementorJson,
       _elementor_edit_mode: 'builder',
       _elementor_template_type: 'wp-page',
+      _elementor_page_settings: JSON.stringify({ hide_title: 'yes' }),
+      _wp_page_template: 'elementor_header_footer',
     };
   }
 

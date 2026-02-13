@@ -768,6 +768,61 @@ router.post('/city-templates/seed', async (req, res) => {
   }
 });
 
+// Force-reseed: reload all templates from disk, overwriting DB copies
+// Use after editing template JSON files to update future page generations
+const forceReseedHandler = async (req, res) => {
+  try {
+    const templatesDir = path.join(__dirname, '../../templates');
+    const results = [];
+
+    for (const def of TEMPLATE_DEFINITIONS) {
+      const filePath = path.join(templatesDir, def.file);
+      if (!fs.existsSync(filePath)) {
+        results.push({ service: def.service, status: 'file_not_found', file: def.file });
+        continue;
+      }
+
+      const rawJson = fs.readFileSync(filePath, 'utf-8');
+      const existing = await CityPageTemplate.findOne({ where: { serviceSlug: def.serviceSlug } });
+
+      if (existing) {
+        await existing.update({ elementorJson: rawJson, name: def.name });
+        results.push({ service: def.service, status: 'updated', id: existing.id });
+      } else {
+        const template = await CityPageTemplate.create({
+          service: def.service,
+          serviceSlug: def.serviceSlug,
+          name: def.name,
+          templateType: 'elementor',
+          elementorJson: rawJson,
+          htmlTemplate: null,
+          titleTemplate: '{service} Services in {city}, {state_abbr}',
+          slugTemplate: '{service_slug}-{city_slug}-{state_abbr_lower}',
+        });
+        results.push({ service: def.service, status: 'created', id: template.id });
+      }
+    }
+
+    const updated = results.filter(r => r.status === 'updated').length;
+    const created = results.filter(r => r.status === 'created').length;
+
+    await Log.create({
+      action: 'city_templates_reseeded',
+      status: 'success',
+      message: `Force-reseeded templates: ${updated} updated, ${created} created`,
+      metadata: { results },
+    });
+
+    logger.info(`Force-reseeded templates: ${updated} updated, ${created} created`);
+    res.json({ updated, created, results });
+  } catch (error) {
+    logger.error('Failed to force-reseed city templates', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+};
+router.get('/city-templates/reseed', forceReseedHandler);
+router.post('/city-templates/reseed', forceReseedHandler);
+
 // List all templates
 router.get('/city-templates', async (req, res) => {
   try {

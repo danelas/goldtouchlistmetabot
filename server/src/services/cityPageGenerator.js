@@ -115,6 +115,42 @@ function extractTextBlocks(elements, path = []) {
       }
     }
 
+    // Capture button widget text (handled separately via city swap, not GPT)
+    if (el.elType === 'widget' && el.widgetType === 'button') {
+      const settings = el.settings || {};
+      if (settings.text) {
+        blocks.push({
+          path: currentPath,
+          field: 'text',
+          widgetType: 'button',
+          originalText: settings.text,
+          isButton: true,
+          linkUrl: settings.link?.url || '',
+        });
+      }
+    }
+
+    // Capture image-box widget text
+    if (el.elType === 'widget' && el.widgetType === 'image-box') {
+      const settings = el.settings || {};
+      if (settings.title_text) {
+        blocks.push({
+          path: currentPath,
+          field: 'title_text',
+          widgetType: 'image-box',
+          originalText: settings.title_text,
+        });
+      }
+      if (settings.description_text) {
+        blocks.push({
+          path: currentPath,
+          field: 'description_text',
+          widgetType: 'image-box',
+          originalText: settings.description_text,
+        });
+      }
+    }
+
     // Recurse into child elements (sections, columns, containers)
     if (el.elements && el.elements.length > 0) {
       blocks.push(...extractTextBlocks(el.elements, currentPath.concat('elements')));
@@ -122,6 +158,60 @@ function extractTextBlocks(elements, path = []) {
   }
 
   return blocks;
+}
+
+// Detect the original template city from headings (usually the first heading contains it)
+function detectTemplateCity(blocks) {
+  for (const block of blocks) {
+    if (block.widgetType === 'heading' && block.originalText) {
+      // Pattern: "Services in CityName" or "Services in CityName, State"
+      const match = block.originalText.match(/in\s+([A-Z][\w\s.]+?)(?:,|$)/i);
+      if (match) return match[1].trim();
+    }
+  }
+  return null;
+}
+
+// After GPT rewrite, swap old city references in buttons and update their URLs
+function replaceCityInElements(elements, oldCity, newCity, newState, serviceSlug) {
+  const newStateAbbr = getStateAbbr(newState);
+  const cityRegex = new RegExp(oldCity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+
+  function walk(els) {
+    for (const el of els) {
+      if (el.elType === 'widget' && el.widgetType === 'button') {
+        const settings = el.settings || {};
+        // Replace city name in button text
+        if (settings.text) {
+          settings.text = settings.text.replace(cityRegex, newCity);
+        }
+        // Update button link URL to target city directory search
+        if (settings.link && settings.link.url) {
+          const listingUrl = `https://goldtouchlist.com/?s=${encodeURIComponent(newCity)}&post_type=hp_listing&_category=&location=${encodeURIComponent(newCity + ', ' + newStateAbbr)}`;
+          settings.link.url = listingUrl;
+        }
+      }
+      // Also catch any remaining old city references in headings/text
+      if (el.settings) {
+        if (el.settings.title && typeof el.settings.title === 'string') {
+          el.settings.title = el.settings.title.replace(cityRegex, newCity);
+        }
+        if (el.settings.editor && typeof el.settings.editor === 'string') {
+          el.settings.editor = el.settings.editor.replace(cityRegex, newCity);
+        }
+        if (el.settings.title_text && typeof el.settings.title_text === 'string') {
+          el.settings.title_text = el.settings.title_text.replace(cityRegex, newCity);
+        }
+        if (el.settings.description_text && typeof el.settings.description_text === 'string') {
+          el.settings.description_text = el.settings.description_text.replace(cityRegex, newCity);
+        }
+      }
+      if (el.elements && el.elements.length > 0) {
+        walk(el.elements);
+      }
+    }
+  }
+  walk(elements);
 }
 
 // Set a value deep in the Elementor JSON tree using a path array
@@ -140,18 +230,19 @@ const REWRITE_SYSTEM_PROMPT = `You are a professional local SEO copywriter for G
 Your job: Rewrite text blocks for a city-specific service landing page. You will receive the original text blocks from a template page and must rewrite them for a NEW city.
 
 RULES:
-- Rewrite every text block with UNIQUE, ORIGINAL copy. Do NOT just swap city names.
+- Rewrite every text block with UNIQUE, ORIGINAL copy. Do NOT just swap city names — rephrase, restructure, and vary the angles.
 - Keep the same general meaning and purpose of each block but use different words, phrasing, and angles.
 - Make the content feel locally relevant to the target city.
 - Keep the same approximate length for each block (do not make it significantly longer or shorter).
-- Headings should stay punchy and short.
+- **CRITICAL: Mention the target city name FREQUENTLY throughout the content — at least once per paragraph and in most headings. The content must clearly read as being about that specific city. Every body text block should reference the city at least 2-3 times.**
+- Headings should include the city name where the original heading includes a city name.
 - Body text should be professional, clear, and trust-building.
 - Preserve any HTML tags in body text (p, strong, em, br, ul, li, a, span, h2, h3, etc.) — rewrite the text inside the tags but keep the tag structure.
 - Do NOT add markdown formatting. Output plain text for headings, HTML for body blocks.
 - Do NOT invent fake statistics, reviews, or business names.
-- Mention the city name naturally throughout.
 - Keep links/URLs exactly as provided — do not change any URLs.
 - No emojis, no hype language, no fluff.
+- Do NOT include button text blocks in your response — skip any blocks marked as (button).
 
 RESPONSE FORMAT:
 You must respond with ONLY a JSON array of objects, one per text block, in the same order as provided.
@@ -241,13 +332,21 @@ async function generateCityPage({ templateId, city, state, status = 'publish' })
     }
 
     // Extract all text blocks
-    const textBlocks = extractTextBlocks(elements);
-    logger.info('Extracted text blocks from Elementor template', {
-      city, service: template.service, blockCount: textBlocks.length,
+    const allBlocks = extractTextBlocks(elements);
+    // Separate: GPT rewrites text blocks, buttons are handled by city swap
+    const textBlocks = allBlocks.filter(b => !b.isButton);
+    const buttonBlocks = allBlocks.filter(b => b.isButton);
+
+    logger.info('Extracted blocks from Elementor template', {
+      city, service: template.service, textBlocks: textBlocks.length, buttons: buttonBlocks.length,
     });
 
+    // Detect original template city for post-processing replacement
+    const templateCity = detectTemplateCity(allBlocks);
+    logger.info('Detected template city', { templateCity, targetCity: city });
+
     if (textBlocks.length > 0) {
-      // Send to GPT for unique rewriting
+      // Send text blocks (not buttons) to GPT for unique rewriting
       const rewritten = await rewriteTextBlocks(
         textBlocks, city, state, template.service, template.serviceSlug
       );
@@ -259,6 +358,12 @@ async function generateCityPage({ templateId, city, state, status = 'publish' })
           setNestedValue(elements, block.path, block.field, item.rewrittenText);
         }
       }
+    }
+
+    // Post-processing: replace old city references in buttons, links, and any remaining text
+    if (templateCity && templateCity.toLowerCase() !== city.toLowerCase()) {
+      replaceCityInElements(elements, templateCity, city, state, template.serviceSlug);
+      logger.info('Post-processed city replacement', { from: templateCity, to: city });
     }
 
     elementorData = JSON.stringify(elements);
