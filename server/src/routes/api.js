@@ -958,8 +958,93 @@ router.get('/city-pages', async (req, res) => {
   }
 });
 
+// Trigger the daily city page job manually (generates all categories for the next city)
+// Supports both GET (browser) and POST (API)
+const runDailyHandler = async (req, res) => {
+  logger.info('=== RUN-DAILY ENDPOINT HIT ===', { method: req.method });
+  try {
+    // Auto-seed templates if none exist
+    const templateCount = await CityPageTemplate.count();
+    logger.info('Template count in DB:', { templateCount });
+
+    if (templateCount === 0) {
+      logger.info('No templates found, auto-seeding before running daily job...');
+      const seedResults = await seedTemplatesIfNeeded();
+      const created = seedResults.filter(r => r.status === 'created').length;
+      logger.info('Seed results:', { created, seedResults });
+      if (created === 0) {
+        return res.status(400).json({ error: 'No templates could be seeded. Check that template files exist in server/templates/' });
+      }
+    }
+
+    const { executeCityPageJob } = require('../scheduler');
+    const result = await executeCityPageJob();
+    if (!result) {
+      const activeTemplates = await CityPageTemplate.count({ where: { isActive: true } });
+      if (activeTemplates === 0) {
+        return res.json({ message: 'No active templates found. Seed templates first.', activeTemplates: 0 });
+      }
+      return res.json({ message: 'All 50 cities have been fully processed. No more cities in the queue.' });
+    }
+    res.json(result);
+  } catch (error) {
+    logger.error('Manual city page job failed', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+};
+router.get('/city-pages/run-daily', runDailyHandler);
+router.post('/city-pages/run-daily', runDailyHandler);
+
+// See what city is next in the queue
+router.get('/city-pages/next', async (req, res) => {
+  try {
+    const next = await cityPageGenerator.getNextCity();
+    if (!next) {
+      return res.json({ message: 'All cities have been fully processed', remaining: 0 });
+    }
+
+    const allTemplates = await CityPageTemplate.findAll({ where: { isActive: true } });
+    const templateCount = allTemplates.length;
+    let remaining = 0;
+    for (const entry of cityPageGenerator.CITY_PAGE_CITIES) {
+      const published = await CityPage.count({
+        where: { city: entry.city, state: entry.state, status: 'published' },
+      });
+      if (published < templateCount) remaining++;
+    }
+
+    res.json({
+      nextCity: next.city,
+      nextState: next.state,
+      templateCount,
+      remaining,
+      totalCities: cityPageGenerator.CITY_PAGE_CITIES.length,
+    });
+  } catch (error) {
+    logger.error('Failed to get next city', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get available cities (built-in list)
+router.get('/city-pages/cities', async (req, res) => {
+  res.json({
+    cities: CITIES.map((c) => ({
+      name: c.name,
+      state: c.state,
+      slug: c.slug,
+      stateAbbr: cityPageGenerator.getStateAbbr(c.state),
+    })),
+    placeholders: [
+      '{city}', '{city_slug}', '{state}', '{state_abbr}', '{state_abbr_lower}',
+      '{service}', '{service_slug}', '{service_lower}',
+      '{city_state}', '{city_state_abbr}',
+      '{listing_url}', '{provider_url}', '{site_url}',
+    ],
+  });
+});
+
 // Generate a single city page
-// Body: { templateId, city, state, status? }
 router.post('/city-pages/generate', async (req, res) => {
   try {
     const { templateId, city, state, status } = req.body;
@@ -983,8 +1068,6 @@ router.post('/city-pages/generate', async (req, res) => {
 });
 
 // Batch generate city pages for multiple cities
-// Body: { templateId, cities: [{city, state}, ...], status? }
-// OR: { templateId, status? }  (uses all cities from CITIES array)
 router.post('/city-pages/batch', async (req, res) => {
   try {
     const { templateId, cities, status } = req.body;
@@ -993,7 +1076,6 @@ router.post('/city-pages/batch', async (req, res) => {
       return res.status(400).json({ error: 'templateId is required' });
     }
 
-    // If no cities provided, use the built-in CITIES list
     const cityList = cities || CITIES.map((c) => ({ city: c.name, state: c.state }));
 
     const result = await cityPageGenerator.batchGenerateCityPages({
@@ -1009,7 +1091,7 @@ router.post('/city-pages/batch', async (req, res) => {
   }
 });
 
-// Delete a city page record
+// Delete a city page record (MUST be last — :id is a catch-all param)
 router.delete('/city-pages/:id', async (req, res) => {
   try {
     const cityPage = await CityPage.findByPk(req.params.id);
@@ -1018,88 +1100,6 @@ router.delete('/city-pages/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     logger.error('Failed to delete city page', { error: error.message });
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get available cities (built-in list + ability to add custom ones)
-router.get('/city-pages/cities', async (req, res) => {
-  res.json({
-    cities: CITIES.map((c) => ({
-      name: c.name,
-      state: c.state,
-      slug: c.slug,
-      stateAbbr: cityPageGenerator.getStateAbbr(c.state),
-    })),
-    placeholders: [
-      '{city}', '{city_slug}', '{state}', '{state_abbr}', '{state_abbr_lower}',
-      '{service}', '{service_slug}', '{service_lower}',
-      '{city_state}', '{city_state_abbr}',
-      '{listing_url}', '{provider_url}', '{site_url}',
-    ],
-  });
-});
-
-// Trigger the daily city page job manually (generates all categories for the next city)
-router.post('/city-pages/run-daily', async (req, res) => {
-  try {
-    // Auto-seed templates if none exist
-    const templateCount = await CityPageTemplate.count();
-    if (templateCount === 0) {
-      logger.info('No templates found, auto-seeding before running daily job...');
-      const seedResults = await seedTemplatesIfNeeded();
-      const created = seedResults.filter(r => r.status === 'created').length;
-      if (created === 0) {
-        return res.status(400).json({ error: 'No templates could be seeded. Check that template files exist in server/templates/' });
-      }
-      logger.info(`Auto-seeded ${created} templates, proceeding with daily job`);
-    }
-
-    const { executeCityPageJob } = require('../scheduler');
-    const result = await executeCityPageJob();
-    if (!result) {
-      // Check if it's because no templates or no cities
-      const activeTemplates = await CityPageTemplate.count({ where: { isActive: true } });
-      if (activeTemplates === 0) {
-        return res.json({ message: 'No active templates found. Seed templates first via POST /api/city-templates/seed' });
-      }
-      return res.json({ message: 'All 50 cities have been fully processed. No more cities in the queue.' });
-    }
-    res.json(result);
-  } catch (error) {
-    logger.error('Manual city page job failed', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// See what city is next in the queue
-router.get('/city-pages/next', async (req, res) => {
-  try {
-    const next = await cityPageGenerator.getNextCity();
-    if (!next) {
-      return res.json({ message: 'All cities have been fully processed', remaining: 0 });
-    }
-
-    // Count remaining cities
-    const allTemplates = await CityPageTemplate.findAll({ where: { isActive: true } });
-    const templateCount = allTemplates.length;
-    let remaining = 0;
-    for (const entry of cityPageGenerator.CITY_PAGE_CITIES) {
-      const published = await CityPage.count({
-        where: { city: entry.city, state: entry.state, status: 'published' },
-      });
-      if (published < templateCount) remaining++;
-    }
-
-    res.json({
-      nextCity: next.city,
-      nextState: next.state,
-      templateCount,
-      remaining,
-      totalCities: cityPageGenerator.CITY_PAGE_CITIES.length,
-    });
-  } catch (error) {
-    logger.error('Failed to get next city', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
