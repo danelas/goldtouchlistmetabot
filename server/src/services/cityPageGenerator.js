@@ -63,6 +63,18 @@ function buildVars(city, state, service, serviceSlug) {
   };
 }
 
+// Replace placeholders inside Elementor JSON (works on the stringified JSON)
+function replaceElementorPlaceholders(elementorJsonStr, vars) {
+  let result = elementorJsonStr;
+  for (const [key, value] of Object.entries(vars)) {
+    // Replace {placeholder} patterns in the JSON string
+    // Use a global regex that matches even inside JSON string values
+    const regex = new RegExp(`\\{${key}\\}`, 'g');
+    result = result.replace(regex, value);
+  }
+  return result;
+}
+
 // Generate a single city page from a template and publish to WordPress
 async function generateCityPage({ templateId, city, state, status = 'publish' }) {
   const template = await CityPageTemplate.findByPk(templateId);
@@ -72,12 +84,30 @@ async function generateCityPage({ templateId, city, state, status = 'publish' })
 
   const vars = buildVars(city, state, template.service, template.serviceSlug);
 
-  // Build title, slug, and content from template
+  // Build title and slug
   const title = replacePlaceholders(template.titleTemplate, vars);
   const slug = replacePlaceholders(template.slugTemplate, vars);
-  const content = replacePlaceholders(template.htmlTemplate, vars);
 
-  // Check if page already exists
+  // Build content based on template type
+  let content = '';
+  let elementorData = null;
+
+  if (template.templateType === 'elementor' && template.elementorJson) {
+    // Elementor JSON template: do placeholder replacement on the raw JSON string
+    const rawJson = template.elementorJson;
+    const processedJson = replaceElementorPlaceholders(rawJson, vars);
+    elementorData = processedJson;
+
+    // Also set a basic HTML fallback content for non-Elementor rendering
+    content = template.htmlTemplate ? replacePlaceholders(template.htmlTemplate, vars) : '';
+
+    logger.info('Processing Elementor template', { title, slug, jsonLength: processedJson.length });
+  } else {
+    // Plain HTML template
+    content = template.htmlTemplate ? replacePlaceholders(template.htmlTemplate, vars) : '';
+  }
+
+  // Check if page already exists in our DB
   const existing = await CityPage.findOne({
     where: { templateId, city, state, serviceSlug: template.serviceSlug },
   });
@@ -111,11 +141,11 @@ async function generateCityPage({ templateId, city, state, status = 'publish' })
     let wpResult;
     if (existingWpPage) {
       // Update existing WP page
-      wpResult = await wordpress.updatePage(existingWpPage.id, { title, content, slug, status });
+      wpResult = await wordpress.updatePage(existingWpPage.id, { title, content, slug, status, elementorData });
       logger.info('Updated existing WordPress page', { slug, wpPageId: existingWpPage.id });
     } else {
       // Create new WP page
-      wpResult = await wordpress.createPage({ title, content, slug, status });
+      wpResult = await wordpress.createPage({ title, content, slug, status, elementorData });
     }
 
     await cityPage.update({

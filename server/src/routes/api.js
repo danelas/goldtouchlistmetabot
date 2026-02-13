@@ -727,24 +727,38 @@ router.get('/city-templates/:id', async (req, res) => {
   }
 });
 
-// Upload a new template
-// Body: { service, serviceSlug, name, htmlTemplate, titleTemplate?, slugTemplate? }
+// Upload a new template (Elementor JSON or HTML)
+// Body: { service, serviceSlug, name, elementorJson OR htmlTemplate, titleTemplate?, slugTemplate? }
 router.post('/city-templates', async (req, res) => {
   try {
-    const { service, serviceSlug, name, htmlTemplate, titleTemplate, slugTemplate } = req.body;
+    const { service, serviceSlug, name, elementorJson, htmlTemplate, titleTemplate, slugTemplate } = req.body;
 
-    if (!service || !serviceSlug || !name || !htmlTemplate) {
+    if (!service || !serviceSlug || !name) {
       return res.status(400).json({
-        error: 'Required fields: service, serviceSlug, name, htmlTemplate',
-        placeholders: 'Available placeholders in htmlTemplate: {city}, {city_slug}, {state}, {state_abbr}, {state_abbr_lower}, {service}, {service_slug}, {service_lower}, {city_state}, {city_state_abbr}, {listing_url}, {provider_url}, {site_url}',
+        error: 'Required fields: service, serviceSlug, name, and either elementorJson or htmlTemplate',
+        placeholders: '{city}, {city_slug}, {state}, {state_abbr}, {state_abbr_lower}, {service}, {service_slug}, {service_lower}, {city_state}, {city_state_abbr}, {listing_url}, {provider_url}, {site_url}',
+        example: 'For Elementor: paste the exported JSON as elementorJson. Replace city-specific text with {city}, state with {state_abbr}, etc.',
       });
     }
+
+    if (!elementorJson && !htmlTemplate) {
+      return res.status(400).json({ error: 'Either elementorJson or htmlTemplate is required' });
+    }
+
+    // If elementorJson is an object/array, stringify it for storage
+    const elementorStr = elementorJson
+      ? (typeof elementorJson === 'string' ? elementorJson : JSON.stringify(elementorJson))
+      : null;
+
+    const templateType = elementorStr ? 'elementor' : 'html';
 
     const template = await CityPageTemplate.create({
       service,
       serviceSlug: serviceSlug.toLowerCase(),
       name,
-      htmlTemplate,
+      templateType,
+      elementorJson: elementorStr,
+      htmlTemplate: htmlTemplate || null,
       titleTemplate: titleTemplate || '{service} in {city}, {state_abbr}',
       slugTemplate: slugTemplate || '{service_slug}-{city_slug}-{state_abbr_lower}',
     });
@@ -752,8 +766,8 @@ router.post('/city-templates', async (req, res) => {
     await Log.create({
       action: 'city_template_created',
       status: 'success',
-      message: `City page template created: ${name} (${service})`,
-      metadata: { templateId: template.id },
+      message: `City page template created: ${name} (${service}, ${templateType})`,
+      metadata: { templateId: template.id, templateType },
     });
 
     res.json(template);
@@ -790,7 +804,7 @@ router.delete('/city-templates/:id', async (req, res) => {
   }
 });
 
-// Preview a template with a specific city (returns generated HTML without publishing)
+// Preview a template with a specific city (returns generated content without publishing)
 router.post('/city-templates/:id/preview', async (req, res) => {
   try {
     const template = await CityPageTemplate.findByPk(req.params.id);
@@ -804,9 +818,17 @@ router.post('/city-templates/:id/preview', async (req, res) => {
     const vars = cityPageGenerator.buildVars(city, state, template.service, template.serviceSlug);
     const title = cityPageGenerator.replacePlaceholders(template.titleTemplate, vars);
     const slug = cityPageGenerator.replacePlaceholders(template.slugTemplate, vars);
-    const content = cityPageGenerator.replacePlaceholders(template.htmlTemplate, vars);
 
-    res.json({ title, slug, content, vars });
+    const result = { title, slug, templateType: template.templateType, vars };
+
+    if (template.templateType === 'elementor' && template.elementorJson) {
+      result.elementorJson = cityPageGenerator.replacePlaceholders(template.elementorJson, vars);
+    }
+    if (template.htmlTemplate) {
+      result.htmlContent = cityPageGenerator.replacePlaceholders(template.htmlTemplate, vars);
+    }
+
+    res.json(result);
   } catch (error) {
     logger.error('Failed to preview city template', { error: error.message });
     res.status(500).json({ error: error.message });

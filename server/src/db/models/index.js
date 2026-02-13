@@ -315,7 +315,7 @@ const ImageAsset = sequelize.define('ImageAsset', {
   },
 });
 
-// CityPageTemplate model - stores HTML templates per service category for city page generation
+// CityPageTemplate model - stores Elementor JSON or HTML templates per service category
 const CityPageTemplate = sequelize.define('CityPageTemplate', {
   id: {
     type: Sequelize.UUID,
@@ -334,9 +334,18 @@ const CityPageTemplate = sequelize.define('CityPageTemplate', {
     type: Sequelize.STRING,
     allowNull: false,
   },
+  templateType: {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: 'elementor',
+  },
+  elementorJson: {
+    type: Sequelize.TEXT,
+    allowNull: true,
+  },
   htmlTemplate: {
     type: Sequelize.TEXT,
-    allowNull: false,
+    allowNull: true,
   },
   titleTemplate: {
     type: Sequelize.STRING,
