@@ -1050,6 +1050,27 @@ const runDailyHandler = async (req, res) => {
 router.get('/city-pages/run-daily', runDailyHandler);
 router.post('/city-pages/run-daily', runDailyHandler);
 
+// Reset a city: delete all CityPage records so run-daily will regenerate them
+// GET: /api/city-pages/reset?city=Dallas&state=Texas
+const resetCityHandler = async (req, res) => {
+  try {
+    const city = req.query.city || req.body?.city;
+    const state = req.query.state || req.body?.state;
+    if (!city || !state) {
+      return res.status(400).json({ error: 'city and state are required' });
+    }
+
+    const deleted = await CityPage.destroy({ where: { city, state } });
+    logger.info(`Reset city pages: ${city}, ${state}`, { deletedCount: deleted });
+    res.json({ city, state, deletedRecords: deleted, message: `Deleted ${deleted} records. run-daily will regenerate this city.` });
+  } catch (error) {
+    logger.error('Failed to reset city', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+};
+router.get('/city-pages/reset', resetCityHandler);
+router.post('/city-pages/reset', resetCityHandler);
+
 // Mark cities as already done (for cities that already have WP pages created outside this system)
 // GET: /api/city-pages/mark-done?city=Fort+Lauderdale&state=Florida
 // POST: { cities: [{ city: "Fort Lauderdale", state: "Florida" }, ...] }
