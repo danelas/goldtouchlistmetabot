@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const logger = require('../utils/logger');
 const { Post, Schedule, Log, Conversation, Message, SystemInstruction, Article, ImageAsset, CityPageTemplate, CityPage } = require('../db/models');
 const { generatePostContent } = require('../services/openai');
@@ -699,6 +701,64 @@ router.get('/status', async (req, res) => {
 
 // ============ CITY PAGE TEMPLATES ============
 
+// Seed all built-in Elementor templates from server/templates/ directory
+const TEMPLATE_DEFINITIONS = [
+  { file: 'cleaning.json', service: 'Cleaning', serviceSlug: 'cleaning', name: 'Cleaning Services City Page' },
+  { file: 'beauty.json', service: 'Beauty', serviceSlug: 'beauty', name: 'Beauty Services City Page' },
+  { file: 'massage.json', service: 'Massage', serviceSlug: 'massage', name: 'Massage Services City Page' },
+  { file: 'skincare.json', service: 'Skincare', serviceSlug: 'skincare', name: 'Skincare Services City Page' },
+  { file: 'wellness.json', service: 'Wellness', serviceSlug: 'wellness', name: 'Wellness Services City Page' },
+];
+
+router.post('/city-templates/seed', async (req, res) => {
+  try {
+    const templatesDir = path.join(__dirname, '../../templates');
+    const results = [];
+
+    for (const def of TEMPLATE_DEFINITIONS) {
+      // Skip if template for this service already exists
+      const existing = await CityPageTemplate.findOne({ where: { serviceSlug: def.serviceSlug } });
+      if (existing) {
+        results.push({ service: def.service, status: 'already_exists', id: existing.id });
+        continue;
+      }
+
+      const filePath = path.join(templatesDir, def.file);
+      if (!fs.existsSync(filePath)) {
+        results.push({ service: def.service, status: 'file_not_found', file: def.file });
+        continue;
+      }
+
+      const rawJson = fs.readFileSync(filePath, 'utf-8');
+
+      const template = await CityPageTemplate.create({
+        service: def.service,
+        serviceSlug: def.serviceSlug,
+        name: def.name,
+        templateType: 'elementor',
+        elementorJson: rawJson,
+        htmlTemplate: null,
+        titleTemplate: '{service} Services in {city}, {state_abbr}',
+        slugTemplate: '{service_slug}-{city_slug}-{state_abbr_lower}',
+      });
+
+      results.push({ service: def.service, status: 'created', id: template.id });
+    }
+
+    await Log.create({
+      action: 'city_templates_seeded',
+      status: 'success',
+      message: `Seeded ${results.filter(r => r.status === 'created').length} city page templates`,
+      metadata: { results },
+    });
+
+    res.json({ results });
+  } catch (error) {
+    logger.error('Failed to seed city templates', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // List all templates
 router.get('/city-templates', async (req, res) => {
   try {
@@ -804,26 +864,45 @@ router.delete('/city-templates/:id', async (req, res) => {
   }
 });
 
-// Preview a template with a specific city (returns generated content without publishing)
+// Preview a template — shows extracted text blocks and optionally rewrites them via GPT
+// Body: { city, state, rewrite?: boolean }
 router.post('/city-templates/:id/preview', async (req, res) => {
   try {
     const template = await CityPageTemplate.findByPk(req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { city, state } = req.body;
+    const { city, state, rewrite } = req.body;
     if (!city || !state) {
-      return res.status(400).json({ error: 'city and state are required' });
+      return res.status(400).json({ error: 'city and state are required. Add rewrite: true to see GPT-rewritten text.' });
     }
 
     const vars = cityPageGenerator.buildVars(city, state, template.service, template.serviceSlug);
     const title = cityPageGenerator.replacePlaceholders(template.titleTemplate, vars);
     const slug = cityPageGenerator.replacePlaceholders(template.slugTemplate, vars);
 
-    const result = { title, slug, templateType: template.templateType, vars };
+    const result = { title, slug, templateType: template.templateType };
 
     if (template.templateType === 'elementor' && template.elementorJson) {
-      result.elementorJson = cityPageGenerator.replacePlaceholders(template.elementorJson, vars);
+      // Parse and extract text blocks so user can see what will be rewritten
+      const elements = cityPageGenerator.parseElementorExport(template.elementorJson);
+      const textBlocks = cityPageGenerator.extractTextBlocks(elements);
+
+      result.textBlocks = textBlocks.map((b, i) => ({
+        index: i,
+        widgetType: b.widgetType,
+        field: b.field,
+        originalText: b.originalText,
+      }));
+
+      // If rewrite requested, actually call GPT to show rewritten versions
+      if (rewrite) {
+        const rewritten = await cityPageGenerator.rewriteTextBlocks(
+          textBlocks, city, state, template.service, template.serviceSlug
+        );
+        result.rewrittenBlocks = rewritten;
+      }
     }
+
     if (template.htmlTemplate) {
       result.htmlContent = cityPageGenerator.replacePlaceholders(template.htmlTemplate, vars);
     }
