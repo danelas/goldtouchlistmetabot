@@ -315,8 +315,114 @@ const ImageAsset = sequelize.define('ImageAsset', {
   },
 });
 
+// CityPageTemplate model - stores HTML templates per service category for city page generation
+const CityPageTemplate = sequelize.define('CityPageTemplate', {
+  id: {
+    type: Sequelize.UUID,
+    defaultValue: Sequelize.UUIDV4,
+    primaryKey: true,
+  },
+  service: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  serviceSlug: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  name: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  htmlTemplate: {
+    type: Sequelize.TEXT,
+    allowNull: false,
+  },
+  titleTemplate: {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: '{service} in {city}, {state_abbr}',
+  },
+  slugTemplate: {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: '{service_slug}-{city_slug}-{state_abbr_lower}',
+  },
+  isActive: {
+    type: Sequelize.BOOLEAN,
+    defaultValue: true,
+  },
+});
+
+// CityPage model - tracks generated WordPress pages per city+service
+const CityPage = sequelize.define('CityPage', {
+  id: {
+    type: Sequelize.UUID,
+    defaultValue: Sequelize.UUIDV4,
+    primaryKey: true,
+  },
+  templateId: {
+    type: Sequelize.UUID,
+    allowNull: false,
+  },
+  service: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  serviceSlug: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  city: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  citySlug: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  state: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  stateAbbr: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  title: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  slug: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  wpPageId: {
+    type: Sequelize.INTEGER,
+    allowNull: true,
+  },
+  wpLink: {
+    type: Sequelize.TEXT,
+    allowNull: true,
+  },
+  status: {
+    type: Sequelize.ENUM('pending', 'published', 'failed'),
+    defaultValue: 'pending',
+  },
+  publishedAt: {
+    type: Sequelize.DATE,
+    allowNull: true,
+  },
+  errorMessage: {
+    type: Sequelize.TEXT,
+    allowNull: true,
+  },
+});
+
 // Relationships
 Conversation.hasMany(Message, { foreignKey: 'conversationId', as: 'messages' });
 Message.belongsTo(Conversation, { foreignKey: 'conversationId' });
+CityPageTemplate.hasMany(CityPage, { foreignKey: 'templateId', as: 'pages' });
+CityPage.belongsTo(CityPageTemplate, { foreignKey: 'templateId', as: 'template' });
 
-module.exports = { sequelize, Post, Schedule, Log, Conversation, Message, SystemInstruction, Article, ImageAsset };
+module.exports = { sequelize, Post, Schedule, Log, Conversation, Message, SystemInstruction, Article, ImageAsset, CityPageTemplate, CityPage };

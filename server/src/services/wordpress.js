@@ -83,4 +83,80 @@ async function verifyConnection() {
   }
 }
 
-module.exports = { createPost, getCategories, verifyConnection };
+async function createPage({ title, content, slug, status = 'publish', parentId = null }) {
+  if (!WP_URL || !WP_USER || !WP_APP_PASSWORD) {
+    throw new Error('WordPress credentials not configured. Set WP_SITE_URL, WP_USERNAME, WP_APP_PASSWORD.');
+  }
+
+  const payload = {
+    title,
+    content,
+    slug,
+    status,
+  };
+
+  if (parentId) {
+    payload.parent = parentId;
+  }
+
+  logger.info('Creating WordPress page', { title, slug, status });
+
+  const response = await axios.post(`${WP_URL}/wp-json/wp/v2/pages`, payload, {
+    headers: {
+      ...getAuthHeader(),
+      'Content-Type': 'application/json',
+    },
+  });
+
+  logger.info('WordPress page created', { wpPageId: response.data.id, link: response.data.link, slug: response.data.slug });
+
+  return {
+    wpPageId: response.data.id,
+    link: response.data.link,
+    slug: response.data.slug,
+    status: response.data.status,
+  };
+}
+
+async function getPageBySlug(slug) {
+  if (!WP_URL || !WP_USER || !WP_APP_PASSWORD) {
+    throw new Error('WordPress credentials not configured.');
+  }
+
+  const response = await axios.get(`${WP_URL}/wp-json/wp/v2/pages`, {
+    headers: getAuthHeader(),
+    params: { slug, per_page: 1 },
+  });
+
+  return response.data.length > 0 ? response.data[0] : null;
+}
+
+async function updatePage(pageId, { title, content, slug, status }) {
+  if (!WP_URL || !WP_USER || !WP_APP_PASSWORD) {
+    throw new Error('WordPress credentials not configured.');
+  }
+
+  const payload = {};
+  if (title) payload.title = title;
+  if (content) payload.content = content;
+  if (slug) payload.slug = slug;
+  if (status) payload.status = status;
+
+  logger.info('Updating WordPress page', { pageId, slug });
+
+  const response = await axios.post(`${WP_URL}/wp-json/wp/v2/pages/${pageId}`, payload, {
+    headers: {
+      ...getAuthHeader(),
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return {
+    wpPageId: response.data.id,
+    link: response.data.link,
+    slug: response.data.slug,
+    status: response.data.status,
+  };
+}
+
+module.exports = { createPost, createPage, getPageBySlug, updatePage, getCategories, verifyConnection };

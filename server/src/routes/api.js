@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
-const { Post, Schedule, Log, Conversation, Message, SystemInstruction, Article, ImageAsset } = require('../db/models');
+const { Post, Schedule, Log, Conversation, Message, SystemInstruction, Article, ImageAsset, CityPageTemplate, CityPage } = require('../db/models');
 const { generatePostContent } = require('../services/openai');
 const { publishPost, getPageInfo, verifyToken } = require('../services/facebook');
 const instagram = require('../services/instagram');
 const wordpress = require('../services/wordpress');
 const { generateArticleQueue, CITIES, SERVICES, ARTICLE_TEMPLATES } = require('../services/articleGenerator');
+const cityPageGenerator = require('../services/cityPageGenerator');
 const scheduler = require('../scheduler');
 
 // ============ POSTS ============
@@ -694,6 +695,239 @@ router.get('/status', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// ============ CITY PAGE TEMPLATES ============
+
+// List all templates
+router.get('/city-templates', async (req, res) => {
+  try {
+    const templates = await CityPageTemplate.findAll({
+      order: [['createdAt', 'DESC']],
+      include: [{ model: CityPage, as: 'pages', attributes: ['id', 'city', 'state', 'status', 'slug', 'wpLink'] }],
+    });
+    res.json(templates);
+  } catch (error) {
+    logger.error('Failed to fetch city templates', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single template
+router.get('/city-templates/:id', async (req, res) => {
+  try {
+    const template = await CityPageTemplate.findByPk(req.params.id, {
+      include: [{ model: CityPage, as: 'pages' }],
+    });
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+    res.json(template);
+  } catch (error) {
+    logger.error('Failed to fetch city template', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload a new template
+// Body: { service, serviceSlug, name, htmlTemplate, titleTemplate?, slugTemplate? }
+router.post('/city-templates', async (req, res) => {
+  try {
+    const { service, serviceSlug, name, htmlTemplate, titleTemplate, slugTemplate } = req.body;
+
+    if (!service || !serviceSlug || !name || !htmlTemplate) {
+      return res.status(400).json({
+        error: 'Required fields: service, serviceSlug, name, htmlTemplate',
+        placeholders: 'Available placeholders in htmlTemplate: {city}, {city_slug}, {state}, {state_abbr}, {state_abbr_lower}, {service}, {service_slug}, {service_lower}, {city_state}, {city_state_abbr}, {listing_url}, {provider_url}, {site_url}',
+      });
+    }
+
+    const template = await CityPageTemplate.create({
+      service,
+      serviceSlug: serviceSlug.toLowerCase(),
+      name,
+      htmlTemplate,
+      titleTemplate: titleTemplate || '{service} in {city}, {state_abbr}',
+      slugTemplate: slugTemplate || '{service_slug}-{city_slug}-{state_abbr_lower}',
+    });
+
+    await Log.create({
+      action: 'city_template_created',
+      status: 'success',
+      message: `City page template created: ${name} (${service})`,
+      metadata: { templateId: template.id },
+    });
+
+    res.json(template);
+  } catch (error) {
+    logger.error('Failed to create city template', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a template
+router.put('/city-templates/:id', async (req, res) => {
+  try {
+    const template = await CityPageTemplate.findByPk(req.params.id);
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    await template.update(req.body);
+    res.json(template);
+  } catch (error) {
+    logger.error('Failed to update city template', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a template
+router.delete('/city-templates/:id', async (req, res) => {
+  try {
+    const template = await CityPageTemplate.findByPk(req.params.id);
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+    await template.destroy();
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to delete city template', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Preview a template with a specific city (returns generated HTML without publishing)
+router.post('/city-templates/:id/preview', async (req, res) => {
+  try {
+    const template = await CityPageTemplate.findByPk(req.params.id);
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    const { city, state } = req.body;
+    if (!city || !state) {
+      return res.status(400).json({ error: 'city and state are required' });
+    }
+
+    const vars = cityPageGenerator.buildVars(city, state, template.service, template.serviceSlug);
+    const title = cityPageGenerator.replacePlaceholders(template.titleTemplate, vars);
+    const slug = cityPageGenerator.replacePlaceholders(template.slugTemplate, vars);
+    const content = cityPageGenerator.replacePlaceholders(template.htmlTemplate, vars);
+
+    res.json({ title, slug, content, vars });
+  } catch (error) {
+    logger.error('Failed to preview city template', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ CITY PAGES ============
+
+// List all generated city pages
+router.get('/city-pages', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+    const service = req.query.service;
+    const status = req.query.status;
+
+    const where = {};
+    if (service) where.serviceSlug = service;
+    if (status) where.status = status;
+
+    const { count, rows } = await CityPage.findAndCountAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+      include: [{ model: CityPageTemplate, as: 'template', attributes: ['id', 'name', 'service'] }],
+    });
+
+    res.json({
+      cityPages: rows,
+      total: count,
+      page,
+      totalPages: Math.ceil(count / limit),
+    });
+  } catch (error) {
+    logger.error('Failed to fetch city pages', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate a single city page
+// Body: { templateId, city, state, status? }
+router.post('/city-pages/generate', async (req, res) => {
+  try {
+    const { templateId, city, state, status } = req.body;
+
+    if (!templateId || !city || !state) {
+      return res.status(400).json({ error: 'templateId, city, and state are required' });
+    }
+
+    const result = await cityPageGenerator.generateCityPage({
+      templateId,
+      city,
+      state,
+      status: status || 'publish',
+    });
+
+    res.json(result);
+  } catch (error) {
+    logger.error('City page generation failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Batch generate city pages for multiple cities
+// Body: { templateId, cities: [{city, state}, ...], status? }
+// OR: { templateId, status? }  (uses all cities from CITIES array)
+router.post('/city-pages/batch', async (req, res) => {
+  try {
+    const { templateId, cities, status } = req.body;
+
+    if (!templateId) {
+      return res.status(400).json({ error: 'templateId is required' });
+    }
+
+    // If no cities provided, use the built-in CITIES list
+    const cityList = cities || CITIES.map((c) => ({ city: c.name, state: c.state }));
+
+    const result = await cityPageGenerator.batchGenerateCityPages({
+      templateId,
+      cities: cityList,
+      status: status || 'publish',
+    });
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Batch city page generation failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a city page record
+router.delete('/city-pages/:id', async (req, res) => {
+  try {
+    const cityPage = await CityPage.findByPk(req.params.id);
+    if (!cityPage) return res.status(404).json({ error: 'City page not found' });
+    await cityPage.destroy();
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to delete city page', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get available cities (built-in list + ability to add custom ones)
+router.get('/city-pages/cities', async (req, res) => {
+  res.json({
+    cities: CITIES.map((c) => ({
+      name: c.name,
+      state: c.state,
+      slug: c.slug,
+      stateAbbr: cityPageGenerator.getStateAbbr(c.state),
+    })),
+    placeholders: [
+      '{city}', '{city_slug}', '{state}', '{state_abbr}', '{state_abbr_lower}',
+      '{service}', '{service_slug}', '{service_lower}',
+      '{city_state}', '{city_state_abbr}',
+      '{listing_url}', '{provider_url}', '{site_url}',
+    ],
+  });
 });
 
 module.exports = router;
