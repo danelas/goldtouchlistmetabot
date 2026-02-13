@@ -60,6 +60,276 @@ const CITIES = [
     region: 'ChIJ9cr6ICcB2YgRvo6_QHW-AnY',
     neighborhoods: ['Fort Lauderdale', 'Hollywood', 'Pembroke Pines', 'Davie', 'Plantation'],
   },
+  {
+    name: 'Dallas',
+    state: 'Texas',
+    slug: 'dallas',
+    neighborhoods: ['Uptown', 'Deep Ellum', 'Highland Park', 'Oak Lawn', 'Bishop Arts'],
+  },
+  {
+    name: 'Houston',
+    state: 'Texas',
+    slug: 'houston',
+    neighborhoods: ['Montrose', 'The Heights', 'Midtown', 'River Oaks', 'Galleria'],
+  },
+  {
+    name: 'San Antonio',
+    state: 'Texas',
+    slug: 'san-antonio',
+    neighborhoods: ['River Walk', 'Alamo Heights', 'Stone Oak', 'Southtown', 'Pearl District'],
+  },
+  {
+    name: 'Austin',
+    state: 'Texas',
+    slug: 'austin',
+    neighborhoods: ['South Congress', 'Downtown', 'East Austin', 'Zilker', 'Hyde Park'],
+  },
+  {
+    name: 'Chicago',
+    state: 'Illinois',
+    slug: 'chicago',
+    neighborhoods: ['Lincoln Park', 'Wicker Park', 'Gold Coast', 'River North', 'Lakeview'],
+  },
+  {
+    name: 'Phoenix',
+    state: 'Arizona',
+    slug: 'phoenix',
+    neighborhoods: ['Scottsdale', 'Arcadia', 'Downtown Phoenix', 'Tempe', 'Paradise Valley'],
+  },
+  {
+    name: 'San Diego',
+    state: 'California',
+    slug: 'san-diego',
+    neighborhoods: ['La Jolla', 'Gaslamp Quarter', 'Pacific Beach', 'North Park', 'Hillcrest'],
+  },
+  {
+    name: 'San Francisco',
+    state: 'California',
+    slug: 'san-francisco',
+    neighborhoods: ['Marina', 'SoMa', 'Mission District', 'Pacific Heights', 'Nob Hill'],
+  },
+  {
+    name: 'San Jose',
+    state: 'California',
+    slug: 'san-jose',
+    neighborhoods: ['Willow Glen', 'Santana Row', 'Downtown San Jose', 'Almaden Valley', 'Rose Garden'],
+  },
+  {
+    name: 'Philadelphia',
+    state: 'Pennsylvania',
+    slug: 'philadelphia',
+    neighborhoods: ['Center City', 'Rittenhouse Square', 'Old City', 'Fishtown', 'University City'],
+  },
+  {
+    name: 'Jacksonville',
+    state: 'Florida',
+    slug: 'jacksonville',
+    neighborhoods: ['San Marco', 'Riverside', 'Avondale', 'Jacksonville Beach', 'Ponte Vedra'],
+  },
+  {
+    name: 'Orlando',
+    state: 'Florida',
+    slug: 'orlando',
+    neighborhoods: ['Winter Park', 'Thornton Park', 'Lake Nona', 'College Park', 'Dr. Phillips'],
+  },
+  {
+    name: 'Tampa',
+    state: 'Florida',
+    slug: 'tampa',
+    neighborhoods: ['South Tampa', 'Ybor City', 'Hyde Park', 'Channelside', 'Seminole Heights'],
+  },
+  {
+    name: 'Atlanta',
+    state: 'Georgia',
+    slug: 'atlanta',
+    neighborhoods: ['Buckhead', 'Midtown', 'Virginia-Highland', 'Decatur', 'Inman Park'],
+  },
+  {
+    name: 'Charlotte',
+    state: 'North Carolina',
+    slug: 'charlotte',
+    neighborhoods: ['South End', 'NoDa', 'Uptown', 'Dilworth', 'Plaza Midwood'],
+  },
+  {
+    name: 'Denver',
+    state: 'Colorado',
+    slug: 'denver',
+    neighborhoods: ['LoDo', 'Cherry Creek', 'RiNo', 'Capitol Hill', 'Highlands'],
+  },
+  {
+    name: 'Seattle',
+    state: 'Washington',
+    slug: 'seattle',
+    neighborhoods: ['Capitol Hill', 'Ballard', 'Queen Anne', 'Fremont', 'Belltown'],
+  },
+  {
+    name: 'Portland',
+    state: 'Oregon',
+    slug: 'portland',
+    neighborhoods: ['Pearl District', 'Alberta Arts', 'Hawthorne', 'Nob Hill', 'Division'],
+  },
+  {
+    name: 'Nashville',
+    state: 'Tennessee',
+    slug: 'nashville',
+    neighborhoods: ['The Gulch', 'East Nashville', 'Germantown', '12 South', 'Music Row'],
+  },
+  {
+    name: 'Las Vegas',
+    state: 'Nevada',
+    slug: 'las-vegas',
+    neighborhoods: ['Summerlin', 'Henderson', 'The Strip', 'Downtown', 'Spring Valley'],
+  },
+  {
+    name: 'Boston',
+    state: 'Massachusetts',
+    slug: 'boston',
+    neighborhoods: ['Back Bay', 'Beacon Hill', 'South End', 'Seaport', 'Cambridge'],
+  },
+  {
+    name: 'Washington',
+    state: 'Washington',
+    slug: 'washington-dc',
+    neighborhoods: ['Georgetown', 'Dupont Circle', 'Capitol Hill', 'Adams Morgan', 'Navy Yard'],
+  },
+  {
+    name: 'Baltimore',
+    state: 'Maryland',
+    slug: 'baltimore',
+    neighborhoods: ['Inner Harbor', 'Federal Hill', 'Fells Point', 'Canton', 'Mount Vernon'],
+  },
+  {
+    name: 'Detroit',
+    state: 'Michigan',
+    slug: 'detroit',
+    neighborhoods: ['Midtown', 'Corktown', 'Downtown', 'Grosse Pointe', 'Royal Oak'],
+  },
+  {
+    name: 'Minneapolis',
+    state: 'Minnesota',
+    slug: 'minneapolis',
+    neighborhoods: ['Uptown', 'North Loop', 'Northeast', 'Loring Park', 'St. Paul'],
+  },
+  {
+    name: 'Columbus',
+    state: 'Ohio',
+    slug: 'columbus',
+    neighborhoods: ['Short North', 'German Village', 'Clintonville', 'Grandview', 'Downtown'],
+  },
+  {
+    name: 'Cleveland',
+    state: 'Ohio',
+    slug: 'cleveland',
+    neighborhoods: ['Ohio City', 'Tremont', 'Downtown', 'Lakewood', 'University Circle'],
+  },
+  {
+    name: 'Cincinnati',
+    state: 'Ohio',
+    slug: 'cincinnati',
+    neighborhoods: ['Over-the-Rhine', 'Hyde Park', 'Mount Adams', 'Oakley', 'Downtown'],
+  },
+  {
+    name: 'Indianapolis',
+    state: 'Indiana',
+    slug: 'indianapolis',
+    neighborhoods: ['Broad Ripple', 'Mass Ave', 'Fountain Square', 'Carmel', 'Downtown'],
+  },
+  {
+    name: 'Kansas City',
+    state: 'Missouri',
+    slug: 'kansas-city',
+    neighborhoods: ['Country Club Plaza', 'Westport', 'Crossroads', 'Brookside', 'River Market'],
+  },
+  {
+    name: 'St. Louis',
+    state: 'Missouri',
+    slug: 'st-louis',
+    neighborhoods: ['Central West End', 'Soulard', 'The Loop', 'Clayton', 'Tower Grove'],
+  },
+  {
+    name: 'New Orleans',
+    state: 'Louisiana',
+    slug: 'new-orleans',
+    neighborhoods: ['French Quarter', 'Garden District', 'Marigny', 'Warehouse District', 'Uptown'],
+  },
+  {
+    name: 'Pittsburgh',
+    state: 'Pennsylvania',
+    slug: 'pittsburgh',
+    neighborhoods: ['Shadyside', 'Lawrenceville', 'Strip District', 'South Side', 'Squirrel Hill'],
+  },
+  {
+    name: 'Sacramento',
+    state: 'California',
+    slug: 'sacramento',
+    neighborhoods: ['Midtown', 'East Sacramento', 'Land Park', 'Oak Park', 'Natomas'],
+  },
+  {
+    name: 'Salt Lake City',
+    state: 'Utah',
+    slug: 'salt-lake-city',
+    neighborhoods: ['Sugar House', 'The Avenues', 'Downtown', '9th and 9th', 'Liberty Park'],
+  },
+  {
+    name: 'Raleigh',
+    state: 'North Carolina',
+    slug: 'raleigh',
+    neighborhoods: ['Downtown', 'North Hills', 'Cameron Village', 'Glenwood South', 'Five Points'],
+  },
+  {
+    name: 'Richmond',
+    state: 'Virginia',
+    slug: 'richmond',
+    neighborhoods: ['The Fan', 'Carytown', 'Scott\'s Addition', 'Church Hill', 'Shockoe Bottom'],
+  },
+  {
+    name: 'Milwaukee',
+    state: 'Wisconsin',
+    slug: 'milwaukee',
+    neighborhoods: ['Third Ward', 'East Side', 'Bay View', 'Walker\'s Point', 'Shorewood'],
+  },
+  {
+    name: 'Scottsdale',
+    state: 'Arizona',
+    slug: 'scottsdale',
+    neighborhoods: ['Old Town', 'North Scottsdale', 'McCormick Ranch', 'Gainey Ranch', 'DC Ranch'],
+  },
+  {
+    name: 'Boca Raton',
+    state: 'Florida',
+    slug: 'boca-raton',
+    neighborhoods: ['Mizner Park', 'Royal Palm', 'West Boca', 'Downtown Boca', 'Deerfield Beach'],
+  },
+  {
+    name: 'West Palm Beach',
+    state: 'Florida',
+    slug: 'west-palm-beach',
+    neighborhoods: ['Clematis Street', 'City Place', 'Northwood', 'El Cid', 'South End'],
+  },
+  {
+    name: 'Pompano Beach',
+    state: 'Florida',
+    slug: 'pompano-beach',
+    neighborhoods: ['Lighthouse Point', 'Hillsboro Beach', 'Palm Aire', 'Cypress Creek', 'Downtown Pompano'],
+  },
+  {
+    name: 'Coral Springs',
+    state: 'Florida',
+    slug: 'coral-springs',
+    neighborhoods: ['Parkland', 'Heron Bay', 'Wyndham', 'Riverside', 'Eagle Trace'],
+  },
+  {
+    name: 'Pembroke Pines',
+    state: 'Florida',
+    slug: 'pembroke-pines',
+    neighborhoods: ['Chapel Trail', 'Silver Lakes', 'Pembroke Lakes', 'Century Village', 'Miramar'],
+  },
+  {
+    name: 'Hialeah',
+    state: 'Florida',
+    slug: 'hialeah',
+    neighborhoods: ['Palm Springs', 'Miami Lakes', 'Hialeah Gardens', 'Westland', 'Country Club'],
+  },
 ];
 
 const SERVICES = [
@@ -109,7 +379,12 @@ const PROVIDER_CTA_URL = 'https://goldtouchlist.com/account/login/';
 
 function buildListingUrl(city, service) {
   const location = encodeURIComponent(`${city.name}, ${city.state}`);
-  return `https://goldtouchlist.com/?post_type=hp_listing&latitude=${city.latitude}&longitude=${city.longitude}&_region=${city.region}&_category=${service.categoryId}&s=&location=${location}&city=${encodeURIComponent(city.name)}`;
+  // Cities with full geo data get the precise search URL
+  if (city.latitude && city.longitude) {
+    return `https://goldtouchlist.com/?post_type=hp_listing&latitude=${city.latitude}&longitude=${city.longitude}&_region=${city.region || ''}&_category=${service.categoryId}&s=&location=${location}&city=${encodeURIComponent(city.name)}`;
+  }
+  // Cities without geo data get a simpler listing category URL
+  return `https://goldtouchlist.com/listing-category/${service.slug}/?location=${location}`;
 }
 
 // ============ SYSTEM INSTRUCTIONS ============
