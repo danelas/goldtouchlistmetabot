@@ -1031,4 +1031,51 @@ router.get('/city-pages/cities', async (req, res) => {
   });
 });
 
+// Trigger the daily city page job manually (generates all categories for the next city)
+router.post('/city-pages/run-daily', async (req, res) => {
+  try {
+    const { executeCityPageJob } = require('../scheduler');
+    const result = await executeCityPageJob();
+    if (!result) {
+      return res.json({ message: 'All cities have been fully processed. No more cities in the queue.' });
+    }
+    res.json(result);
+  } catch (error) {
+    logger.error('Manual city page job failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// See what city is next in the queue
+router.get('/city-pages/next', async (req, res) => {
+  try {
+    const next = await cityPageGenerator.getNextCity();
+    if (!next) {
+      return res.json({ message: 'All cities have been fully processed', remaining: 0 });
+    }
+
+    // Count remaining cities
+    const allTemplates = await CityPageTemplate.findAll({ where: { isActive: true } });
+    const templateCount = allTemplates.length;
+    let remaining = 0;
+    for (const entry of cityPageGenerator.CITY_PAGE_CITIES) {
+      const published = await CityPage.count({
+        where: { city: entry.city, state: entry.state, status: 'published' },
+      });
+      if (published < templateCount) remaining++;
+    }
+
+    res.json({
+      nextCity: next.city,
+      nextState: next.state,
+      templateCount,
+      remaining,
+      totalCities: cityPageGenerator.CITY_PAGE_CITIES.length,
+    });
+  } catch (error) {
+    logger.error('Failed to get next city', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

@@ -351,9 +351,122 @@ async function batchGenerateCityPages({ templateId, cities, status = 'publish' }
   return { total: results.length, succeeded, skipped, failed, results };
 }
 
+// ============ CITIES LIST FOR DAILY CRON ============
+
+const CITY_PAGE_CITIES = [
+  { city: 'Miami', state: 'Florida' },
+  { city: 'Fort Lauderdale', state: 'Florida' },
+  { city: 'Los Angeles', state: 'California' },
+  { city: 'New York', state: 'New York' },
+  { city: 'Hollywood', state: 'Florida' },
+  { city: 'Dallas', state: 'Texas' },
+  { city: 'Houston', state: 'Texas' },
+  { city: 'San Antonio', state: 'Texas' },
+  { city: 'Austin', state: 'Texas' },
+  { city: 'Chicago', state: 'Illinois' },
+  { city: 'Phoenix', state: 'Arizona' },
+  { city: 'San Diego', state: 'California' },
+  { city: 'San Francisco', state: 'California' },
+  { city: 'San Jose', state: 'California' },
+  { city: 'Philadelphia', state: 'Pennsylvania' },
+  { city: 'Jacksonville', state: 'Florida' },
+  { city: 'Orlando', state: 'Florida' },
+  { city: 'Tampa', state: 'Florida' },
+  { city: 'Atlanta', state: 'Georgia' },
+  { city: 'Charlotte', state: 'North Carolina' },
+  { city: 'Denver', state: 'Colorado' },
+  { city: 'Seattle', state: 'Washington' },
+  { city: 'Portland', state: 'Oregon' },
+  { city: 'Nashville', state: 'Tennessee' },
+  { city: 'Las Vegas', state: 'Nevada' },
+  { city: 'Boston', state: 'Massachusetts' },
+  { city: 'Washington', state: 'Washington' },
+  { city: 'Baltimore', state: 'Maryland' },
+  { city: 'Detroit', state: 'Michigan' },
+  { city: 'Minneapolis', state: 'Minnesota' },
+  { city: 'Columbus', state: 'Ohio' },
+  { city: 'Cleveland', state: 'Ohio' },
+  { city: 'Cincinnati', state: 'Ohio' },
+  { city: 'Indianapolis', state: 'Indiana' },
+  { city: 'Kansas City', state: 'Missouri' },
+  { city: 'St. Louis', state: 'Missouri' },
+  { city: 'New Orleans', state: 'Louisiana' },
+  { city: 'Pittsburgh', state: 'Pennsylvania' },
+  { city: 'Sacramento', state: 'California' },
+  { city: 'Salt Lake City', state: 'Utah' },
+  { city: 'Raleigh', state: 'North Carolina' },
+  { city: 'Richmond', state: 'Virginia' },
+  { city: 'Milwaukee', state: 'Wisconsin' },
+  { city: 'Scottsdale', state: 'Arizona' },
+  { city: 'Boca Raton', state: 'Florida' },
+  { city: 'West Palm Beach', state: 'Florida' },
+  { city: 'Pompano Beach', state: 'Florida' },
+  { city: 'Coral Springs', state: 'Florida' },
+  { city: 'Pembroke Pines', state: 'Florida' },
+  { city: 'Hialeah', state: 'Florida' },
+];
+
+// Find the next city that hasn't had all category pages generated yet
+async function getNextCity() {
+  const allTemplates = await CityPageTemplate.findAll({ where: { isActive: true } });
+  const templateCount = allTemplates.length;
+
+  if (templateCount === 0) {
+    logger.warn('No active city page templates found. Seed templates first.');
+    return null;
+  }
+
+  for (const entry of CITY_PAGE_CITIES) {
+    // Count how many published pages exist for this city across all templates
+    const publishedCount = await CityPage.count({
+      where: { city: entry.city, state: entry.state, status: 'published' },
+    });
+
+    // If this city doesn't have pages for all templates, it's the next one
+    if (publishedCount < templateCount) {
+      return { city: entry.city, state: entry.state, templates: allTemplates };
+    }
+  }
+
+  logger.info('All cities in the list have been fully processed');
+  return null;
+}
+
+// Generate all category pages for a single city (used by the daily cron)
+async function generateAllCategoriesForCity(city, state) {
+  const allTemplates = await CityPageTemplate.findAll({ where: { isActive: true } });
+  const results = [];
+
+  for (const template of allTemplates) {
+    try {
+      const result = await generateCityPage({
+        templateId: template.id,
+        city,
+        state,
+        status: 'publish',
+      });
+      results.push({ service: template.service, city, state, ...result });
+    } catch (error) {
+      results.push({ service: template.service, city, state, success: false, error: error.message });
+    }
+  }
+
+  const succeeded = results.filter((r) => r.success).length;
+  const skipped = results.filter((r) => r.skipped).length;
+  const failed = results.filter((r) => !r.success && !r.skipped).length;
+
+  logger.info('City page generation for all categories complete', {
+    city, state, total: results.length, succeeded, skipped, failed,
+  });
+
+  return { city, state, total: results.length, succeeded, skipped, failed, results };
+}
+
 module.exports = {
   generateCityPage,
   batchGenerateCityPages,
+  generateAllCategoriesForCity,
+  getNextCity,
   extractTextBlocks,
   rewriteTextBlocks,
   parseElementorExport,
@@ -362,4 +475,5 @@ module.exports = {
   slugify,
   getStateAbbr,
   STATE_ABBR,
+  CITY_PAGE_CITIES,
 };

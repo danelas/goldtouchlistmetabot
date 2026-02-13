@@ -6,6 +6,7 @@ const { publishPost } = require('../services/facebook');
 const instagram = require('../services/instagram');
 const { generateArticle, getNextArticle, findTemplate, findService, findCity } = require('../services/articleGenerator');
 const wordpress = require('../services/wordpress');
+const cityPageGenerator = require('../services/cityPageGenerator');
 
 // Categories to rotate through for posts
 const POST_CATEGORIES = ['cleaning', 'massage', 'wellness', 'beauty', 'skincare'];
@@ -333,6 +334,20 @@ function start() {
 
   activeJobs.push({ id: 'article-scheduler', job: articleJob });
   logger.info('Article scheduler registered', { cron: articleCron, timezone: 'America/New_York' });
+
+  // City page scheduler: 9:00 AM Eastern every day
+  // Picks the next city from the list and generates all 5 category pages with GPT-rewritten content
+  const cityPageCron = process.env.CITY_PAGE_CRON_SCHEDULE || '0 9 * * *';
+  const cityPageJob = cron.schedule(cityPageCron, () => {
+    executeCityPageJob().catch((err) => {
+      logger.error('Scheduled city page job failed', { error: err.message });
+    });
+  }, {
+    timezone: 'America/New_York',
+  });
+
+  activeJobs.push({ id: 'city-page-scheduler', job: cityPageJob });
+  logger.info('City page scheduler registered', { cron: cityPageCron, timezone: 'America/New_York' });
 }
 
 function stopAll() {
@@ -346,4 +361,60 @@ function reload() {
   start();
 }
 
-module.exports = { start, stopAll, reload, executePost, executeArticlePost, executeInstagramPost };
+// ============ CITY PAGE DAILY JOB ============
+
+async function executeCityPageJob() {
+  const startTime = Date.now();
+  logger.info('Starting daily city page generation');
+
+  try {
+    // Find the next city that needs pages
+    const next = await cityPageGenerator.getNextCity();
+
+    if (!next) {
+      logger.info('No more cities to process. All cities have been completed.');
+      await Log.create({
+        action: 'city_page_daily',
+        status: 'info',
+        message: 'All cities in the queue have been fully processed.',
+      });
+      return null;
+    }
+
+    logger.info('Processing city pages for next city', { city: next.city, state: next.state });
+
+    // Generate all 5 category pages for this city
+    const result = await cityPageGenerator.generateAllCategoriesForCity(next.city, next.state);
+
+    const duration = Date.now() - startTime;
+    await Log.create({
+      action: 'city_page_daily',
+      status: 'success',
+      message: `City pages for ${next.city}, ${next.state}: ${result.succeeded} published, ${result.skipped} skipped, ${result.failed} failed (${duration}ms)`,
+      metadata: { city: next.city, state: next.state, ...result },
+    });
+
+    logger.info('Daily city page job completed', {
+      city: next.city,
+      state: next.state,
+      succeeded: result.succeeded,
+      failed: result.failed,
+      duration: `${duration}ms`,
+    });
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error('Daily city page job failed', { error: error.message, duration: `${duration}ms` });
+
+    await Log.create({
+      action: 'city_page_daily',
+      status: 'error',
+      message: error.message,
+    });
+
+    throw error;
+  }
+}
+
+module.exports = { start, stopAll, reload, executePost, executeArticlePost, executeInstagramPost, executeCityPageJob };
