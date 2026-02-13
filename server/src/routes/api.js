@@ -995,6 +995,107 @@ const runDailyHandler = async (req, res) => {
 router.get('/city-pages/run-daily', runDailyHandler);
 router.post('/city-pages/run-daily', runDailyHandler);
 
+// Mark cities as already done (for cities that already have WP pages created outside this system)
+// GET: /api/city-pages/mark-done?city=Fort+Lauderdale&state=Florida
+// POST: { cities: [{ city: "Fort Lauderdale", state: "Florida" }, ...] }
+router.get('/city-pages/mark-done', async (req, res) => {
+  try {
+    const { city, state } = req.query;
+    if (!city || !state) {
+      return res.status(400).json({ error: 'city and state query params are required' });
+    }
+
+    const allTemplates = await CityPageTemplate.findAll({ where: { isActive: true } });
+    const results = [];
+
+    for (const template of allTemplates) {
+      const existing = await CityPage.findOne({
+        where: { city, state, templateId: template.id },
+      });
+      if (existing) {
+        results.push({ service: template.service, status: 'already_exists' });
+        continue;
+      }
+
+      const stateAbbr = cityPageGenerator.getStateAbbr(state) || state.substring(0, 2).toUpperCase();
+      const citySlug = city.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      await CityPage.create({
+        templateId: template.id,
+        service: template.service,
+        serviceSlug: template.serviceSlug,
+        city,
+        citySlug,
+        state,
+        stateAbbr,
+        title: `${template.service} Services in ${city}, ${stateAbbr}`,
+        slug: `${template.serviceSlug}-${citySlug}-${stateAbbr.toLowerCase()}`,
+        status: 'published',
+        wpPageId: null,
+        wpLink: null,
+        publishedAt: new Date(),
+      });
+      results.push({ service: template.service, status: 'marked_done' });
+    }
+
+    logger.info(`Marked city as done: ${city}, ${state}`, { results });
+    res.json({ city, state, results });
+  } catch (error) {
+    logger.error('Failed to mark city as done', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/city-pages/mark-done', async (req, res) => {
+  try {
+    const { cities } = req.body;
+    if (!cities || !Array.isArray(cities)) {
+      return res.status(400).json({ error: 'cities array is required in body' });
+    }
+
+    const allTemplates = await CityPageTemplate.findAll({ where: { isActive: true } });
+    const allResults = [];
+
+    for (const { city, state } of cities) {
+      const cityResults = [];
+      for (const template of allTemplates) {
+        const existing = await CityPage.findOne({
+          where: { city, state, templateId: template.id },
+        });
+        if (existing) {
+          cityResults.push({ service: template.service, status: 'already_exists' });
+          continue;
+        }
+
+        const stateAbbr = cityPageGenerator.getStateAbbr(state) || state.substring(0, 2).toUpperCase();
+        const citySlug = city.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        await CityPage.create({
+          templateId: template.id,
+          service: template.service,
+          serviceSlug: template.serviceSlug,
+          city,
+          citySlug,
+          state,
+          stateAbbr,
+          title: `${template.service} Services in ${city}, ${stateAbbr}`,
+          slug: `${template.serviceSlug}-${citySlug}-${stateAbbr.toLowerCase()}`,
+          status: 'published',
+          wpPageId: null,
+          wpLink: null,
+          publishedAt: new Date(),
+        });
+        cityResults.push({ service: template.service, status: 'marked_done' });
+      }
+      allResults.push({ city, state, results: cityResults });
+    }
+
+    logger.info(`Marked ${cities.length} cities as done`);
+    res.json({ marked: allResults });
+  } catch (error) {
+    logger.error('Failed to mark cities as done', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // See what city is next in the queue
 router.get('/city-pages/next', async (req, res) => {
   try {
