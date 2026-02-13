@@ -710,48 +710,57 @@ const TEMPLATE_DEFINITIONS = [
   { file: 'wellness.json', service: 'Wellness', serviceSlug: 'wellness', name: 'Wellness Services City Page' },
 ];
 
-router.post('/city-templates/seed', async (req, res) => {
-  try {
-    const templatesDir = path.join(__dirname, '../../templates');
-    const results = [];
+// Reusable function to seed templates from disk
+async function seedTemplatesIfNeeded() {
+  const templatesDir = path.join(__dirname, '../../templates');
+  const results = [];
 
-    for (const def of TEMPLATE_DEFINITIONS) {
-      // Skip if template for this service already exists
-      const existing = await CityPageTemplate.findOne({ where: { serviceSlug: def.serviceSlug } });
-      if (existing) {
-        results.push({ service: def.service, status: 'already_exists', id: existing.id });
-        continue;
-      }
-
-      const filePath = path.join(templatesDir, def.file);
-      if (!fs.existsSync(filePath)) {
-        results.push({ service: def.service, status: 'file_not_found', file: def.file });
-        continue;
-      }
-
-      const rawJson = fs.readFileSync(filePath, 'utf-8');
-
-      const template = await CityPageTemplate.create({
-        service: def.service,
-        serviceSlug: def.serviceSlug,
-        name: def.name,
-        templateType: 'elementor',
-        elementorJson: rawJson,
-        htmlTemplate: null,
-        titleTemplate: '{service} Services in {city}, {state_abbr}',
-        slugTemplate: '{service_slug}-{city_slug}-{state_abbr_lower}',
-      });
-
-      results.push({ service: def.service, status: 'created', id: template.id });
+  for (const def of TEMPLATE_DEFINITIONS) {
+    const existing = await CityPageTemplate.findOne({ where: { serviceSlug: def.serviceSlug } });
+    if (existing) {
+      results.push({ service: def.service, status: 'already_exists', id: existing.id });
+      continue;
     }
 
+    const filePath = path.join(templatesDir, def.file);
+    if (!fs.existsSync(filePath)) {
+      results.push({ service: def.service, status: 'file_not_found', file: def.file });
+      continue;
+    }
+
+    const rawJson = fs.readFileSync(filePath, 'utf-8');
+
+    const template = await CityPageTemplate.create({
+      service: def.service,
+      serviceSlug: def.serviceSlug,
+      name: def.name,
+      templateType: 'elementor',
+      elementorJson: rawJson,
+      htmlTemplate: null,
+      titleTemplate: '{service} Services in {city}, {state_abbr}',
+      slugTemplate: '{service_slug}-{city_slug}-{state_abbr_lower}',
+    });
+
+    results.push({ service: def.service, status: 'created', id: template.id });
+  }
+
+  const created = results.filter(r => r.status === 'created').length;
+  if (created > 0) {
     await Log.create({
       action: 'city_templates_seeded',
       status: 'success',
-      message: `Seeded ${results.filter(r => r.status === 'created').length} city page templates`,
+      message: `Seeded ${created} city page templates`,
       metadata: { results },
     });
+    logger.info(`Auto-seeded ${created} city page templates`);
+  }
 
+  return results;
+}
+
+router.post('/city-templates/seed', async (req, res) => {
+  try {
+    const results = await seedTemplatesIfNeeded();
     res.json({ results });
   } catch (error) {
     logger.error('Failed to seed city templates', { error: error.message });
@@ -1034,14 +1043,31 @@ router.get('/city-pages/cities', async (req, res) => {
 // Trigger the daily city page job manually (generates all categories for the next city)
 router.post('/city-pages/run-daily', async (req, res) => {
   try {
+    // Auto-seed templates if none exist
+    const templateCount = await CityPageTemplate.count();
+    if (templateCount === 0) {
+      logger.info('No templates found, auto-seeding before running daily job...');
+      const seedResults = await seedTemplatesIfNeeded();
+      const created = seedResults.filter(r => r.status === 'created').length;
+      if (created === 0) {
+        return res.status(400).json({ error: 'No templates could be seeded. Check that template files exist in server/templates/' });
+      }
+      logger.info(`Auto-seeded ${created} templates, proceeding with daily job`);
+    }
+
     const { executeCityPageJob } = require('../scheduler');
     const result = await executeCityPageJob();
     if (!result) {
-      return res.json({ message: 'All cities have been fully processed. No more cities in the queue.' });
+      // Check if it's because no templates or no cities
+      const activeTemplates = await CityPageTemplate.count({ where: { isActive: true } });
+      if (activeTemplates === 0) {
+        return res.json({ message: 'No active templates found. Seed templates first via POST /api/city-templates/seed' });
+      }
+      return res.json({ message: 'All 50 cities have been fully processed. No more cities in the queue.' });
     }
     res.json(result);
   } catch (error) {
-    logger.error('Manual city page job failed', { error: error.message });
+    logger.error('Manual city page job failed', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message });
   }
 });

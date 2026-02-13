@@ -1,6 +1,8 @@
 const cron = require('node-cron');
+const fs = require('fs');
+const path = require('path');
 const logger = require('../utils/logger');
-const { Post, Schedule, Log, Article, ImageAsset } = require('../db/models');
+const { Post, Schedule, Log, Article, ImageAsset, CityPageTemplate } = require('../db/models');
 const { generatePostContent } = require('../services/openai');
 const { publishPost } = require('../services/facebook');
 const instagram = require('../services/instagram');
@@ -363,11 +365,57 @@ function reload() {
 
 // ============ CITY PAGE DAILY JOB ============
 
+const TEMPLATE_DEFINITIONS = [
+  { file: 'cleaning.json', service: 'Cleaning', serviceSlug: 'cleaning', name: 'Cleaning Services City Page' },
+  { file: 'beauty.json', service: 'Beauty', serviceSlug: 'beauty', name: 'Beauty Services City Page' },
+  { file: 'massage.json', service: 'Massage', serviceSlug: 'massage', name: 'Massage Services City Page' },
+  { file: 'skincare.json', service: 'Skincare', serviceSlug: 'skincare', name: 'Skincare Services City Page' },
+  { file: 'wellness.json', service: 'Wellness', serviceSlug: 'wellness', name: 'Wellness Services City Page' },
+];
+
+async function autoSeedTemplates() {
+  const count = await CityPageTemplate.count();
+  if (count > 0) return;
+
+  logger.info('No city page templates found, auto-seeding from disk...');
+  const templatesDir = path.join(__dirname, '../../templates');
+
+  for (const def of TEMPLATE_DEFINITIONS) {
+    const filePath = path.join(templatesDir, def.file);
+    if (!fs.existsSync(filePath)) {
+      logger.warn(`Template file not found: ${def.file}`);
+      continue;
+    }
+
+    const rawJson = fs.readFileSync(filePath, 'utf-8');
+    await CityPageTemplate.create({
+      service: def.service,
+      serviceSlug: def.serviceSlug,
+      name: def.name,
+      templateType: 'elementor',
+      elementorJson: rawJson,
+      htmlTemplate: null,
+      titleTemplate: '{service} Services in {city}, {state_abbr}',
+      slugTemplate: '{service_slug}-{city_slug}-{state_abbr_lower}',
+    });
+    logger.info(`Auto-seeded template: ${def.service}`);
+  }
+
+  await Log.create({
+    action: 'city_templates_seeded',
+    status: 'success',
+    message: 'Auto-seeded city page templates from disk',
+  });
+}
+
 async function executeCityPageJob() {
   const startTime = Date.now();
   logger.info('Starting daily city page generation');
 
   try {
+    // Auto-seed templates if none exist
+    await autoSeedTemplates();
+
     // Find the next city that needs pages
     const next = await cityPageGenerator.getNextCity();
 
