@@ -107,7 +107,7 @@ async function createPage({ title, content, slug, status = 'publish', parentId =
       _elementor_data: elementorJson,
       _elementor_edit_mode: 'builder',
       _elementor_template_type: 'wp-page',
-      _elementor_page_settings: JSON.stringify({ hide_title: 'yes' }),
+      _elementor_page_settings: { hide_title: 'yes' },
       _wp_page_template: 'elementor_header_footer',
     };
   }
@@ -155,7 +155,7 @@ async function setPostMeta(pageId, elementorData) {
       _elementor_data: elementorJson,
       _elementor_edit_mode: 'builder',
       _elementor_template_type: 'wp-page',
-      _elementor_page_settings: JSON.stringify({ hide_title: 'yes' }),
+      _elementor_page_settings: { hide_title: 'yes' },
       _wp_page_template: 'elementor_header_footer',
     },
   }, { headers });
@@ -194,7 +194,7 @@ async function updatePage(pageId, { title, content, slug, status, elementorData 
       _elementor_data: elementorJson,
       _elementor_edit_mode: 'builder',
       _elementor_template_type: 'wp-page',
-      _elementor_page_settings: JSON.stringify({ hide_title: 'yes' }),
+      _elementor_page_settings: { hide_title: 'yes' },
       _wp_page_template: 'elementor_header_footer',
     };
   }
