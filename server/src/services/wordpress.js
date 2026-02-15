@@ -83,7 +83,7 @@ async function verifyConnection() {
   }
 }
 
-async function createPage({ title, content, slug, status = 'publish', parentId = null, elementorData = null }) {
+async function createPage({ title, content, slug, status = 'publish', parentId = null, elementorData = null, yoastMeta = null }) {
   if (!WP_URL || !WP_USER || !WP_APP_PASSWORD) {
     throw new Error('WordPress credentials not configured. Set WP_SITE_URL, WP_USERNAME, WP_APP_PASSWORD.');
   }
@@ -110,6 +110,14 @@ async function createPage({ title, content, slug, status = 'publish', parentId =
       _elementor_page_settings: { hide_title: 'yes' },
       _wp_page_template: 'elementor_header_footer',
     };
+  }
+
+  // Set Yoast SEO fields if provided
+  if (yoastMeta) {
+    if (!payload.meta) payload.meta = {};
+    if (yoastMeta.focusKeyphrase) payload.meta._yoast_wpseo_focuskw = yoastMeta.focusKeyphrase;
+    if (yoastMeta.seoTitle) payload.meta._yoast_wpseo_title = yoastMeta.seoTitle;
+    if (yoastMeta.metaDesc) payload.meta._yoast_wpseo_metadesc = yoastMeta.metaDesc;
   }
 
   logger.info('Creating WordPress page', { title, slug, status, hasElementor: !!elementorData });
@@ -176,7 +184,7 @@ async function getPageBySlug(slug) {
   return response.data.length > 0 ? response.data[0] : null;
 }
 
-async function updatePage(pageId, { title, content, slug, status, elementorData = null }) {
+async function updatePage(pageId, { title, content, slug, status, elementorData = null, yoastMeta = null }) {
   if (!WP_URL || !WP_USER || !WP_APP_PASSWORD) {
     throw new Error('WordPress credentials not configured.');
   }
@@ -197,6 +205,14 @@ async function updatePage(pageId, { title, content, slug, status, elementorData 
       _elementor_page_settings: { hide_title: 'yes' },
       _wp_page_template: 'elementor_header_footer',
     };
+  }
+
+  // Set Yoast SEO fields if provided
+  if (yoastMeta) {
+    if (!payload.meta) payload.meta = {};
+    if (yoastMeta.focusKeyphrase) payload.meta._yoast_wpseo_focuskw = yoastMeta.focusKeyphrase;
+    if (yoastMeta.seoTitle) payload.meta._yoast_wpseo_title = yoastMeta.seoTitle;
+    if (yoastMeta.metaDesc) payload.meta._yoast_wpseo_metadesc = yoastMeta.metaDesc;
   }
 
   logger.info('Updating WordPress page', { pageId, slug });

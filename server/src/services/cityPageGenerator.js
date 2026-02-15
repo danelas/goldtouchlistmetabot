@@ -297,6 +297,61 @@ Remember: Rewrite with UNIQUE copy. Different words and phrasing. Not just city-
   }
 }
 
+// ============ CONTENT & SEO HELPERS ============
+
+// Build a plain HTML version of all text content from rewritten Elementor elements
+// This goes in the WP content field so Yoast can analyze it
+function buildHtmlContent(elements, city, state, service, serviceSlug) {
+  const stateAbbr = getStateAbbr(state);
+  const searchUrl = `https://goldtouchlist.com/?s=${encodeURIComponent(city)}&post_type=hp_listing&_category=&location=${encodeURIComponent(city + ', ' + stateAbbr)}`;
+  const parts = [];
+
+  function walk(els) {
+    for (const el of els) {
+      if (el.elType === 'widget') {
+        const s = el.settings || {};
+        if (el.widgetType === 'heading' && s.title) {
+          const tag = s.header_size || 'h2';
+          parts.push(`<${tag}>${s.title}</${tag}>`);
+        }
+        if ((el.widgetType === 'text-editor' || el.widgetType === 'theme-post-content') && s.editor) {
+          parts.push(s.editor);
+        }
+        if (el.widgetType === 'image-box') {
+          if (s.title_text) parts.push(`<h3>${s.title_text}</h3>`);
+          if (s.description_text) parts.push(`<p>${s.description_text}</p>`);
+        }
+        if (el.widgetType === 'button' && s.text) {
+          parts.push(`<p><a href="${searchUrl}">${s.text}</a></p>`);
+        }
+      }
+      if (el.elements && el.elements.length > 0) {
+        walk(el.elements);
+      }
+    }
+  }
+  walk(elements);
+
+  // Add internal link at the end for Yoast
+  parts.push(`<p>Browse <a href="${searchUrl}">${service} providers in ${city}, ${stateAbbr}</a> on Gold Touch List.</p>`);
+
+  return parts.join('\n');
+}
+
+// Generate Yoast SEO metadata for a city page
+function buildYoastMeta(city, state, service) {
+  const stateAbbr = getStateAbbr(state);
+  const keyphrase = `${service} Services in ${city}`;
+  const seoTitle = `${service} Services in ${city}, ${stateAbbr} | Gold Touch List`;
+  const metaDesc = `Find trusted ${service.toLowerCase()} services in ${city}, ${stateAbbr}. Browse verified ${service.toLowerCase()} professionals on Gold Touch List and book with confidence.`;
+
+  return {
+    focusKeyphrase: keyphrase,
+    seoTitle,
+    metaDesc,
+  };
+}
+
 // ============ PAGE GENERATION ============
 
 async function generateCityPage({ templateId, city, state, status = 'publish' }) {
@@ -366,12 +421,19 @@ async function generateCityPage({ templateId, city, state, status = 'publish' })
       logger.info('Post-processed city replacement', { from: templateCity, to: city });
     }
 
+    // Build HTML content from rewritten elements for Yoast to analyze
+    content = buildHtmlContent(elements, city, state, template.service, template.serviceSlug);
+
     elementorData = JSON.stringify(elements);
-    logger.info('Elementor template rewritten for city', { city, slug, jsonLength: elementorData.length });
+    logger.info('Elementor template rewritten for city', { city, slug, jsonLength: elementorData.length, contentLength: content.length });
 
   } else if (template.htmlTemplate) {
     content = replacePlaceholders(template.htmlTemplate, vars);
   }
+
+  // Generate Yoast SEO metadata
+  const yoastMeta = buildYoastMeta(city, state, template.service);
+  logger.info('Generated Yoast SEO meta', { city, keyphrase: yoastMeta.focusKeyphrase });
 
   // Create or update the CityPage record
   let cityPage = existing;
@@ -395,10 +457,10 @@ async function generateCityPage({ templateId, city, state, status = 'publish' })
 
     let wpResult;
     if (existingWpPage) {
-      wpResult = await wordpress.updatePage(existingWpPage.id, { title, content, slug, status, elementorData });
+      wpResult = await wordpress.updatePage(existingWpPage.id, { title, content, slug, status, elementorData, yoastMeta });
       logger.info('Updated existing WordPress page', { slug, wpPageId: existingWpPage.id });
     } else {
-      wpResult = await wordpress.createPage({ title, content, slug, status, elementorData });
+      wpResult = await wordpress.createPage({ title, content, slug, status, elementorData, yoastMeta });
     }
 
     await cityPage.update({
