@@ -141,6 +141,15 @@ async function createPage({ title, content, slug, status = 'publish', parentId =
     }
   }
 
+  // Fallback for Yoast meta: try setting via separate REST call
+  if (yoastMeta) {
+    try {
+      await setYoastMeta(wpPageId, yoastMeta);
+    } catch (yoastErr) {
+      logger.warn('Could not set Yoast meta via fallback', { wpPageId, error: yoastErr.message });
+    }
+  }
+
   logger.info('WordPress page created', { wpPageId, link: response.data.link, slug: response.data.slug });
 
   return {
@@ -149,6 +158,22 @@ async function createPage({ title, content, slug, status = 'publish', parentId =
     slug: response.data.slug,
     status: response.data.status,
   };
+}
+
+// Fallback: set Yoast SEO meta directly via the WP REST API post meta endpoint
+async function setYoastMeta(pageId, yoastMeta) {
+  const headers = { ...getAuthHeader(), 'Content-Type': 'application/json' };
+  const metaPayload = {};
+  if (yoastMeta.focusKeyphrase) metaPayload._yoast_wpseo_focuskw = yoastMeta.focusKeyphrase;
+  if (yoastMeta.seoTitle) metaPayload._yoast_wpseo_title = yoastMeta.seoTitle;
+  if (yoastMeta.metaDesc) metaPayload._yoast_wpseo_metadesc = yoastMeta.metaDesc;
+
+  // Try updating the page with Yoast meta in a second call
+  await axios.post(`${WP_URL}/wp-json/wp/v2/pages/${pageId}`, {
+    meta: metaPayload,
+  }, { headers });
+
+  logger.info('Yoast meta set via fallback', { pageId, fields: Object.keys(metaPayload) });
 }
 
 // Fallback: set Elementor post meta directly via the WP REST API post meta endpoint
@@ -223,6 +248,15 @@ async function updatePage(pageId, { title, content, slug, status, elementorData 
       'Content-Type': 'application/json',
     },
   });
+
+  // Fallback for Yoast meta: try setting via separate REST call
+  if (yoastMeta) {
+    try {
+      await setYoastMeta(pageId, yoastMeta);
+    } catch (yoastErr) {
+      logger.warn('Could not set Yoast meta via fallback in update', { pageId, error: yoastErr.message });
+    }
+  }
 
   return {
     wpPageId: response.data.id,
