@@ -237,6 +237,7 @@ RULES:
 - **CRITICAL: Mention the target city name FREQUENTLY throughout the content — at least once per paragraph and in most headings. The content must clearly read as being about that specific city. Every body text block should reference the city at least 2-3 times.**
 - Headings should include the city name where the original heading includes a city name.
 - Body text should be professional, clear, and trust-building.
+- **Keep sentences short and simple for readability (aim for Flesch reading ease 60+). Use common words, avoid jargon, break long sentences into 2-3 shorter ones. Most sentences should be under 20 words.**
 - **Use plenty of transition words (however, therefore, in addition, furthermore, consequently, moreover, nevertheless, likewise, meanwhile, otherwise, thus, accordingly, as a result, for this reason, in fact, in contrast, on the other hand, similarly, specifically, to illustrate, to summarize, ultimately, what's more, above all, after all, at the same time, equally, for instance, in particular, in short, of course, to begin with, to put it another way, to that end, with this in mind). Aim for at least 30% of sentences to contain transition words.**
 - Preserve any HTML tags in body text (p, strong, em, br, ul, li, a, span, h2, h3, etc.) — rewrite the text inside the tags but keep the tag structure.
 - Do NOT add markdown formatting. Output plain text for headings, HTML for body blocks.
