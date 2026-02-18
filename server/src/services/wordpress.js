@@ -120,7 +120,7 @@ async function createPage({ title, content, slug, status = 'publish', parentId =
     if (yoastMeta.metaDesc) payload.meta._yoast_wpseo_metadesc = yoastMeta.metaDesc;
   }
 
-  logger.info('Creating WordPress page', { title, slug, status, hasElementor: !!elementorData });
+  logger.info('Creating WordPress page', { title, slug, status, hasElementor: !!elementorData, metaFields: payload.meta });
 
   const response = await axios.post(`${WP_URL}/wp-json/wp/v2/pages`, payload, {
     headers: {
@@ -215,7 +215,7 @@ async function updatePage(pageId, { title, content, slug, status, elementorData 
     if (yoastMeta.metaDesc) payload.meta._yoast_wpseo_metadesc = yoastMeta.metaDesc;
   }
 
-  logger.info('Updating WordPress page', { pageId, slug });
+  logger.info('Updating WordPress page', { pageId, slug, metaFields: payload.meta });
 
   const response = await axios.post(`${WP_URL}/wp-json/wp/v2/pages/${pageId}`, payload, {
     headers: {
